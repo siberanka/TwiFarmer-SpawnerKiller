@@ -63,7 +63,6 @@ public class SpawnerKiller extends FarmerModule {
             else
                 Bukkit.getPluginManager().registerEvents(spawnerKillerEvent, Main.getInstance());
             Bukkit.getPluginManager().registerEvents(spawnerKillerGuiCreateEvent, Main.getInstance());
-            defaultStatus = configFile.isDefaultStatus();
             customPerm = configFile.getCustomPerm();
             removeMob = configFile.isRemoveMob();
             cookFoods = configFile.isCookFoods();
@@ -72,6 +71,7 @@ public class SpawnerKiller extends FarmerModule {
                 whitelist.addAll(configFile.getWhitelist());
             if (configFile.getMode().equals("blacklist"))
                 blacklist.addAll(configFile.getBlacklist());
+            setDefaultState(configFile.isDefaultStatus());
             String messagex = "&3[" + GLib.getInstance().getName() + "] &a" + getName() + " enabled.";
             ChatUtils.sendMessage(Bukkit.getConsoleSender(), messagex);
         }
@@ -80,6 +80,17 @@ public class SpawnerKiller extends FarmerModule {
             ChatUtils.sendMessage(Bukkit.getConsoleSender(), messagex);
         }
 
+    }
+
+    public void onReload() {
+        if (!this.isEnabled())
+            return;
+        customPerm = configFile.getCustomPerm();
+        removeMob = configFile.isRemoveMob();
+        cookFoods = configFile.isCookFoods();
+        requireFarmer = configFile.isRequireFarmer();
+        customPerm = configFile.getCustomPerm();
+        setDefaultState(configFile.isDefaultStatus());
     }
 
     /**
