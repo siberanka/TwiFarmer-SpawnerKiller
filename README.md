@@ -8,7 +8,7 @@ A lightweight module for the Farmer plugin that automatically kills mobs spawned
 
 1. Place the `SpawnerKiller` folder into your `plugins/Farmer/modules/` directory.  
 2. Restart your server.  
-3. A `spawner-killer.yml` and matching language file will be generated under `plugins/Farmer/modules/SpawnerKiller/`.
+3. A `config.yml` and matching language file will be generated under `plugins/Farmer/modules/SpawnerKiller/`.
 
 ---
 
