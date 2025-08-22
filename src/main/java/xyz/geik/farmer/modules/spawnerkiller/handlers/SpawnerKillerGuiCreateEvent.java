@@ -9,6 +9,7 @@ import xyz.geik.farmer.api.handlers.FarmerModuleGuiCreateEvent;
 import xyz.geik.farmer.helpers.gui.GuiHelper;
 import xyz.geik.farmer.model.Farmer;
 import xyz.geik.farmer.modules.spawnerkiller.SpawnerKiller;
+import xyz.geik.glib.chat.ChatUtils;
 import xyz.geik.glib.shades.inventorygui.DynamicGuiElement;
 import xyz.geik.glib.shades.inventorygui.StaticGuiElement;
 
@@ -65,9 +66,9 @@ public class SpawnerKillerGuiCreateEvent implements Listener {
         ItemStack item = GuiHelper.getItem("moduleGui.icon", SpawnerKiller.getInstance().getLang());
         ItemMeta meta = item.getItemMeta();
         String status = farmer.getAttributeStatus("spawnerkiller") ?
-                SpawnerKiller.getInstance().getLang().getText("enabled") :
-                SpawnerKiller.getInstance().getLang().getText("disabled");
-        meta.setLore(meta.getLore().stream().map(line -> line.replace("{status}", status))
+                SpawnerKiller.getInstance().getLang().getString("enabled") :
+                SpawnerKiller.getInstance().getLang().getString("disabled");
+        meta.setLore(meta.getLore().stream().map(line -> ChatUtils.color(line.replace("{status}", status)))
                 .collect(Collectors.toList()));
         item.setItemMeta(meta);
         return item;
