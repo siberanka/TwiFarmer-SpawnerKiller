@@ -1,44 +1,86 @@
 # Farmer SpawnerKiller Module
 
-A lightweight module for the Farmer plugin that automatically kills mobs spawned by mob spawners.
+A production-focused Farmer module that removes mobs created by spawners while preserving drops and Farmer-region controls.
 
----
+Maintainers/authors: Geik contributors and **siberanka**.
 
-## 📦 Installation
+## Platform support
 
-1. Place the `SpawnerKiller` folder into your `plugins/Farmer/modules/` directory.  
-2. Restart your server.  
-3. A `config.yml` and matching language file will be generated under `plugins/Farmer/modules/SpawnerKiller/`.
+- Minecraft **1.21.x** and **26.x**
+- **Paper**, **Folia**, and **Leaf**
+- Farmer **v6-b113+**
+- Optional SpawnerMeta **25.8** and WildStacker API **2025.2** integrations
+- Java 21 for the 1.21.x server line; use the Java version required by the selected 26.x Paper build
 
----
+Plain Bukkit and Spigot servers are intentionally unsupported. The module verifies the Paper scheduler API during startup and fails closed on an unsupported platform.
 
-## ⚙️ Features
+## Installation
 
-- **Automatic Mob Elimination**  
-  Detects and kills any mob hatched from an active spawner in a Farmer region (or globally if no Farmer is set).
+1. Stop the server.
+2. Place `Farmer-SpawnerKiller-1.1.0.jar` in `plugins/Farmer/modules/`.
+3. Start the server once to generate `plugins/Farmer/modules/spawnerkiller/config.yml` and the selected language file.
+4. Set `status: true`, then restart or reload Farmer.
 
-- **Farmer-Dependent or Standalone**  
-  Can require an active Farmer to operate, or run without one based on configuration.
+## Features
 
-- **Burn-on-Kill Option**  
-  Optionally “cook” each kill by using fire damage to yield cooked drops (e.g. cooked meat).
+- Kills vanilla/Paper spawner entities, or consumes SpawnerMeta post-spawn batches.
+- Honors Farmer region state and the per-Farmer `spawnerkiller` attribute.
+- Supports whitelist/blacklist entity filtering and optional cooked drops.
+- Coalesces duplicate Bukkit/SpawnerMeta notifications before committing drops.
+- Uses Paper's entity scheduler for every delayed entity/world mutation, including Folia region ownership changes.
+- Uses bounded async work only for immutable admission checks and WildStacker drop calculation; results are revalidated on the owning region before commit.
+- Applies queue back-pressure, regional limits, legal drop batching, stack-size ceilings, overflow-safe XP calculations, and rate-limited operational logging.
+- Automatically adds missing config/language entries. Malformed, wrongly typed, meaningless, oversized, or invalid entries are backed up to `*.bak-<UTC timestamp>` before repair.
 
-- **Permission-Controlled**  
-  Enable or disable the module’s behavior at runtime via a single permission node.
+## Production optimization
 
-- **Mob Blacklist / Whitelist**  
-  Define exactly which mob types should be eliminated or ignored.
+The optimization module is disabled by default, so every child setting is inert until `optimize-module.enable` is set to `true`.
 
----
+```yaml
+optimize-module:
+  enable: false
+  async-precheck: true
+  async-stack-drops: true
+  processing-delay-ticks: 2
+  max-entities-per-run: 64
+  max-queued-entities: 512
+  max-pending-per-region: 64
+  collapse-duplicate-spawns: true
+  batch-drops: true
+  max-stack-process-amount: 100000
+  audit-log-rate-limit-ms: 5000
+```
 
-## 🤝 Contributing
+`processing-delay-ticks` defers work without touching Bukkit state asynchronously. Large SpawnerMeta batches are spread across ticks with `max-entities-per-run`. Queue limits prevent task flooding; overflow falls back to immediate work on the correct region thread. `async-stack-drops` follows WildStacker's recommendation for large loot calculations, then validates entity identity and stack amount again before removing the stack and spawning rewards.
 
-1. Fork the repository.  
-2. Add your enhancements or bug fixes.  
-3. Open a pull request against the `master` branch.
+## Configuration recovery
 
-Please follow existing code style and update documentation as needed.
+At enable/reload the module validates:
 
----
+- booleans, ranges, permission syntax, and filter mode;
+- entity names against the runtime server's entity registry;
+- every optimization key and safety bound;
+- selected language key types, list sizes, and meaningful text values;
+- YAML size and parse validity.
 
-Thank you for using the **SpawnerKiller** module—happy farming!  
+Unknown custom keys are preserved. Missing keys are merged without creating an error backup. Invalid content is copied first and only then replaced with a safe default. If a selected bundled language is unavailable, English is used safely.
+
+## Building
+
+```bash
+mvn clean verify
+```
+
+The release artifact is written to `target/Farmer-SpawnerKiller-1.1.0.jar`. Dependencies are provided by the server/Farmer module loader and are not shaded into the module.
+
+## Security and lifecycle notes
+
+- Farmer state is checked immediately before committing a kill.
+- A persistent entity transaction marker prevents double processing and duplicate rewards.
+- Stale async WildStacker plans are recalculated at most twice; continuously changing or corrupt state is rejected fail-closed.
+- GUI toggles are permission checked, rate limited, and serialized per Farmer.
+- Listeners, processor state, and queues are released on reload/disable. SpawnerMeta's API has no unregister operation, so one reusable inactive bridge is retained instead of registering another callback on every Farmer reload.
+
+## Contributing
+
+Open pull requests against `main`. Keep Paper/Folia region ownership, fail-closed validation, bounded queues, and the config backup guarantee intact when changing the hot path.
