@@ -1,94 +1,76 @@
 package xyz.geik.farmer.modules.spawnerkiller.handlers;
 
-import com.bgsoftware.wildstacker.api.WildStackerAPI;
 import mc.rellox.spawnermeta.SpawnerMeta;
 import mc.rellox.spawnermeta.api.APIInstance;
 import mc.rellox.spawnermeta.api.events.SpawnerPostSpawnEvent;
 import org.bukkit.Bukkit;
-import org.bukkit.entity.Damageable;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.EntityType;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.inventory.ItemStack;
-import xyz.geik.farmer.Main;
-import xyz.geik.farmer.api.FarmerAPI;
-import xyz.geik.farmer.api.managers.FarmerManager;
-import xyz.geik.farmer.model.Farmer;
+import org.bukkit.plugin.Plugin;
 import xyz.geik.farmer.modules.spawnerkiller.SpawnerKiller;
-import xyz.geik.farmer.modules.spawnerkiller.handlers.SpawnerKillerEvent;
+import xyz.geik.farmer.modules.spawnerkiller.service.SpawnProcessor;
 
-import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * SpawnerMeta Killer Listener
+ * SpawnerMeta 25.8 bridge (Minecraft 1.21.x and 26.x).
+ *
+ * SpawnerMeta does not expose an unregister method for API callbacks. The
+ * active flag therefore makes old callbacks inert across module reloads and
+ * prevents duplicate drop/kill commits.
+ *
  * @author amownyy
- * @since b003
+ * @author siberanka
  */
-public class SpawnerMetaEvent {
+public final class SpawnerMetaEvent {
 
-    /**
-     * SpawnerMeta spawner event
-     * @author amownyy
-     */
-    public SpawnerMetaEvent() {
-        if (Bukkit.getPluginManager().getPlugin("SpawnerMeta") == null)
-            return;
+    private final SpawnerKiller module;
+    private volatile SpawnProcessor processor;
+    private final AtomicBoolean active = new AtomicBoolean(true);
 
-        SpawnerMeta sm = (SpawnerMeta) Bukkit.getPluginManager().getPlugin("SpawnerMeta");
-        assert sm != null;
-        APIInstance api = sm.getAPI();
+    public SpawnerMetaEvent(SpawnerKiller module, SpawnProcessor processor) {
+        this.module = module;
+        this.processor = processor;
 
-        api.register(SpawnerPostSpawnEvent.class, e -> {
-            try {
-                if (SpawnerKiller.getInstance().isRequireFarmer()) {
-                    if (!FarmerAPI.getFarmerManager().hasFarmer(e.getSpawner().center()))
-                        return;
-                    Farmer farmer = FarmerManager.getFarmers().get(Main.getIntegration().getRegionID(e.getSpawner().center()));
-                    if (!farmer.getAttributeStatus("spawnerkiller"))
-                        return;
-                }
-                e.entities.forEach( entity ->
-                        killEntity(e, entity)
-                );
-            }
-            catch (Exception ignored) {}
-        });
+        Plugin plugin = Bukkit.getPluginManager().getPlugin("SpawnerMeta");
+        if (!(plugin instanceof SpawnerMeta spawnerMeta) || !plugin.isEnabled()) {
+            throw new IllegalStateException("SpawnerMeta was disabled while its integration was being registered");
+        }
+        APIInstance api = spawnerMeta.getAPI();
+        if (api == null) {
+            throw new IllegalStateException("SpawnerMeta returned a null API instance");
+        }
+        api.register(SpawnerPostSpawnEvent.class, this::onPostSpawn);
     }
 
-    /**
-     * Kills an entity from SpawnerPostSpawnEvent
-     * @param e SpawnerPostSpawnEvent
-     * @param entity entity to kill
-     */
-    private void killEntity(SpawnerPostSpawnEvent e, Entity entity) {
-        if (entity instanceof Damageable) {
-            EntityType entityType = e.getSpawner().getType().entity();
-            if (!SpawnerKiller.getInstance().getWhitelist().isEmpty()
-                    && !SpawnerKiller.getInstance().getWhitelist().contains(entityType.toString()))
-                return;
-            if (!SpawnerKiller.getInstance().getBlacklist().isEmpty()
-                    && SpawnerKiller.getInstance().getBlacklist().contains(entityType.toString()))
-                return;
+    private void onPostSpawn(SpawnerPostSpawnEvent event) {
+        SpawnProcessor processorSnapshot = processor;
+        if (!active.get() || !module.isOperational() || event == null || event.entities == null
+                || event.entities.isEmpty() || processorSnapshot == null) {
+            return;
+        }
 
-            if (SpawnerKiller.getInstance().isCookFoods())
-                entity.setFireTicks(20);
-
-            if (Bukkit.getPluginManager().getPlugin("WildStacker") != null) {
-                if (!entityType.equals(EntityType.BLAZE)) {
-                    List<ItemStack> items = WildStackerAPI.getStackedEntity((LivingEntity) e.entities.get(0))
-                            .getDrops(0);
-                    for (ItemStack item : items)
-                        e.entities.get(0).getWorld().dropItemNaturally(e.getSpawner().center(), item);
-                }
-                SpawnerKillerEvent.killCalculator(entity, WildStackerAPI.getStackedEntity((LivingEntity) e.entities.get(0)).getStackAmount());
-                WildStackerAPI.getStackedEntity((LivingEntity) e.entities.get(0)).remove();
-                e.getSpawner().setDelay(-1);
+        SpawnerKiller.OptimizationSettings optimization = module.getOptimizationSettings();
+        int batchSize = optimization.enable() ? optimization.maxEntitiesPerRun() : Integer.MAX_VALUE;
+        int index = 0;
+        for (Object candidate : event.entities) {
+            if (!active.get()) {
                 return;
             }
-            ((Damageable) entity).damage(1000.0);
-            if (SpawnerKiller.getInstance().isRemoveMob())
-                entity.remove();
-            SpawnerKillerEvent.killCalculator(entity, 1);
+            if (candidate instanceof Entity entity) {
+                long extraDelay = optimization.enable() ? index / batchSize : 0L;
+                processorSnapshot.submit(entity, extraDelay);
+                index++;
+            }
         }
+    }
+
+    public void deactivate() {
+        active.set(false);
+        processor = null;
+    }
+
+    public void activate(SpawnProcessor processor) {
+        this.processor = processor;
+        active.set(true);
     }
 }
