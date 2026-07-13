@@ -8,10 +8,12 @@ import xyz.geik.farmer.Main;
 import xyz.geik.farmer.modules.FarmerModule;
 import xyz.geik.farmer.modules.spawnerkiller.configuration.ConfigFile;
 import xyz.geik.farmer.modules.spawnerkiller.configuration.ConfigSchemaRepair;
+import xyz.geik.farmer.modules.spawnerkiller.configuration.UpdateSettings;
 import xyz.geik.farmer.modules.spawnerkiller.handlers.SpawnerKillerEvent;
 import xyz.geik.farmer.modules.spawnerkiller.handlers.SpawnerKillerGuiCreateEvent;
 import xyz.geik.farmer.modules.spawnerkiller.handlers.SpawnerMetaEvent;
 import xyz.geik.farmer.modules.spawnerkiller.service.SpawnProcessor;
+import xyz.geik.farmer.modules.spawnerkiller.update.UpdateChecker;
 import xyz.geik.farmer.shades.storage.Config;
 import xyz.geik.glib.GLib;
 import xyz.geik.glib.chat.ChatUtils;
@@ -28,6 +30,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 
 /**
@@ -47,6 +50,8 @@ public class SpawnerKiller extends FarmerModule {
     private SpawnerKillerGuiCreateEvent spawnerKillerGuiCreateEvent;
     private SpawnerMetaEvent spawnerMetaEvent;
     private SpawnProcessor spawnProcessor;
+    private UpdateChecker updateChecker;
+    private final AtomicLong lifecycleEpoch = new AtomicLong();
 
     private volatile RuntimeSettings settings = RuntimeSettings.defaults();
     private volatile boolean operational;
@@ -59,6 +64,7 @@ public class SpawnerKiller extends FarmerModule {
 
     @Override
     public void onEnable() {
+        lifecycleEpoch.incrementAndGet();
         instance = this;
         setHasGui(true);
 
@@ -71,6 +77,7 @@ public class SpawnerKiller extends FarmerModule {
 
         try {
             loadFilesAndSettings();
+            startUpdateChecker();
             if (configFile.isStatus()) {
                 registerHandlers();
                 operational = true;
@@ -95,10 +102,13 @@ public class SpawnerKiller extends FarmerModule {
             return;
         }
 
+        lifecycleEpoch.incrementAndGet();
+        stopUpdateChecker();
         unregisterHandlers(false);
         operational = false;
         try {
             loadFilesAndSettings();
+            startUpdateChecker();
             if (configFile.isStatus()) {
                 registerHandlers();
                 operational = true;
@@ -113,9 +123,15 @@ public class SpawnerKiller extends FarmerModule {
     @Override
     public void onDisable() {
         operational = false;
+        lifecycleEpoch.incrementAndGet();
+        stopUpdateChecker();
         unregisterHandlers(true);
         settings = RuntimeSettings.defaults();
         instance = null;
+    }
+
+    public long getLifecycleGeneration() {
+        return lifecycleEpoch.get();
     }
 
     private void loadFilesAndSettings() throws IOException {
@@ -218,6 +234,19 @@ public class SpawnerKiller extends FarmerModule {
         else {
             spawnerKillerEvent = new SpawnerKillerEvent(this, spawnProcessor);
             Bukkit.getPluginManager().registerEvents(spawnerKillerEvent, Main.getInstance());
+        }
+    }
+
+    private void startUpdateChecker() {
+        stopUpdateChecker();
+        updateChecker = new UpdateChecker(this, UpdateSettings.from(configFile.getUpdateChecker()));
+        updateChecker.start();
+    }
+
+    private void stopUpdateChecker() {
+        if (updateChecker != null) {
+            updateChecker.stop();
+            updateChecker = null;
         }
     }
 

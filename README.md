@@ -17,7 +17,7 @@ Plain Bukkit and Spigot servers are intentionally unsupported. The module verifi
 ## Installation
 
 1. Stop the server.
-2. Place `Farmer-SpawnerKiller-1.1.0.jar` in `plugins/Farmer/modules/`.
+2. Place `Farmer-SpawnerKiller-1.1.1.jar` in `plugins/Farmer/modules/`.
 3. Start the server once to generate `plugins/Farmer/modules/spawnerkiller/config.yml` and the selected language file.
 4. Set `status: true`, then restart or reload Farmer.
 
@@ -31,6 +31,20 @@ Plain Bukkit and Spigot servers are intentionally unsupported. The module verifi
 - Uses bounded async work only for immutable admission checks and WildStacker drop calculation; results are revalidated on the owning region before commit.
 - Applies queue back-pressure, regional limits, legal drop batching, stack-size ceilings, overflow-safe XP calculations, and rate-limited operational logging.
 - Automatically adds missing config/language entries. Malformed, wrongly typed, meaningless, oversized, or invalid entries are backed up to `*.bak-<UTC timestamp>` before repair.
+
+## Update checker
+
+`update-checker.enable` defaults to `true`. The module checks only the fixed `siberanka/TwiFarmer-SpawnerKiller` GitHub repository using asynchronous HTTPS at startup and every six hours by default. Connection/request timeouts, response size, SemVer tags, and release URLs are strictly bounded and validated.
+
+When a newer release exists, the console and each operator or player with `farmer.admin` receive one localized message per release containing the SpawnerKiller module name, installed/latest versions, and validated download link. Reload/disable cancels or invalidates pending work.
+
+```yaml
+update-checker:
+  enable: true
+  check-interval-hours: 6
+  connect-timeout-seconds: 5
+  request-timeout-seconds: 8
+```
 
 ## Production optimization
 
@@ -71,7 +85,7 @@ Unknown custom keys are preserved. Missing keys are merged without creating an e
 mvn clean verify
 ```
 
-The release artifact is written to `target/Farmer-SpawnerKiller-1.1.0.jar`. Dependencies are provided by the server/Farmer module loader and are not shaded into the module.
+The release artifact is written to `target/Farmer-SpawnerKiller-1.1.1.jar`. Dependencies are provided by the server/Farmer module loader and are not shaded into the module.
 
 ## Security and lifecycle notes
 

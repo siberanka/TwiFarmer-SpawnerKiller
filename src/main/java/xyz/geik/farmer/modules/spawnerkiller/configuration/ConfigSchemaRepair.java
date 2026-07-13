@@ -59,6 +59,11 @@ public final class ConfigSchemaRepair {
             invalid = true;
             changed = true;
         }
+        if (yaml.contains("update-checker") && !yaml.isConfigurationSection("update-checker")) {
+            replacements.put("update-checker", null);
+            invalid = true;
+            changed = true;
+        }
 
         for (Map.Entry<String, Rule> entry : schema.entrySet()) {
             String path = entry.getKey();
@@ -179,6 +184,10 @@ public final class ConfigSchemaRepair {
                 value -> value.trim().toLowerCase(Locale.ROOT)));
         schema.put("whitelist", Rule.entities(Arrays.asList("VILLAGER")));
         schema.put("blacklist", Rule.entities(Arrays.asList("VILLAGER")));
+        schema.put("update-checker.enable", Rule.bool(true));
+        schema.put("update-checker.check-interval-hours", Rule.integer(6, 1, 168));
+        schema.put("update-checker.connect-timeout-seconds", Rule.integer(5, 2, 30));
+        schema.put("update-checker.request-timeout-seconds", Rule.integer(8, 3, 60));
         schema.put("optimize-module.enable", Rule.bool(false));
         schema.put("optimize-module.async-precheck", Rule.bool(true));
         schema.put("optimize-module.async-stack-drops", Rule.bool(true));
@@ -208,6 +217,10 @@ public final class ConfigSchemaRepair {
             int limit = path.endsWith(".skull") ? 8192 : 1024;
             if (string.length() > limit) {
                 return false;
+            }
+            if ("update.available".equals(path)) {
+                return !string.isBlank() && string.contains("{module}") && string.contains("{current}")
+                        && string.contains("{latest}") && string.contains("{url}");
             }
             return !string.isBlank() || path.contains(".lore");
         }

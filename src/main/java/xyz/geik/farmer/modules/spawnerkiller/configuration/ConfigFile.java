@@ -59,6 +59,10 @@ public class ConfigFile extends OkaeriConfig {
             "if you want to remove mobs from blacklist"})
     private List<String> blacklist = Arrays.asList("VILLAGER");
 
+    @CustomKey("update-checker")
+    @Comment("Asynchronously checks the fixed SpawnerKiller GitHub repository for stable releases.")
+    private UpdateCheckerSettings updateChecker = new UpdateCheckerSettings();
+
     @CustomKey("optimize-module")
     @Comment({"Production optimization controls.",
             "All child settings are ignored while enable is false.",
@@ -112,6 +116,23 @@ public class ConfigFile extends OkaeriConfig {
         @CustomKey("audit-log-rate-limit-ms")
         @Comment("Minimum interval between repeated operational warnings of the same category.")
         private long auditLogRateLimitMs = 5000L;
+    }
+
+    @Getter
+    @Setter
+    @Names(strategy = NameStrategy.IDENTITY)
+    public static class UpdateCheckerSettings extends OkaeriConfig {
+
+        private boolean enable = true;
+
+        @CustomKey("check-interval-hours")
+        private int checkIntervalHours = 6;
+
+        @CustomKey("connect-timeout-seconds")
+        private int connectTimeoutSeconds = 5;
+
+        @CustomKey("request-timeout-seconds")
+        private int requestTimeoutSeconds = 8;
     }
 
 }

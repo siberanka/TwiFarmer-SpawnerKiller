@@ -34,7 +34,10 @@ class ConfigSchemaRepairTest {
         YamlConfiguration repaired = YamlConfiguration.loadConfiguration(config.toFile());
         assertTrue(repaired.getBoolean("status"));
         assertFalse(repaired.getBoolean("optimize-module.enable"));
+        assertTrue(repaired.getBoolean("update-checker.enable"));
+        assertEquals(6, repaired.getInt("update-checker.check-interval-hours"));
         assertEquals(512, repaired.getInt("optimize-module.max-queued-entities"));
+        assertTrue(repaired.getBoolean("update-checker.enable"));
         assertEquals(0L, countBackups());
     }
 
@@ -92,6 +95,9 @@ class ConfigSchemaRepairTest {
         assertFalse(loaded.getOptimizeModule().isEnable());
         assertTrue(yaml.isConfigurationSection("optimize-module"));
         assertTrue(yaml.contains("optimize-module.async-stack-drops"));
+        assertTrue(yaml.isConfigurationSection("update-checker"));
+        assertTrue(loaded.getUpdateChecker().isEnable());
+        assertEquals(6, yaml.getInt("update-checker.check-interval-hours"));
         assertEquals(64, yaml.getInt("optimize-module.max-entities-per-run"));
 
         ConfigFile parsed = ConfigManager.create(ConfigFile.class,
