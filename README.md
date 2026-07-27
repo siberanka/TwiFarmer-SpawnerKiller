@@ -17,7 +17,7 @@ Plain Bukkit and Spigot servers are intentionally unsupported. The module verifi
 ## Installation
 
 1. Stop the server.
-2. Place `Farmer-SpawnerKiller-1.1.2.jar` in `plugins/Farmer/modules/`.
+2. Place `Farmer-SpawnerKiller-1.1.3.jar` in `plugins/Farmer/modules/`.
 3. Start the server once to generate `plugins/Farmer/modules/spawnerkiller/config.yml` and the selected language file.
 4. Set `status: true`, then restart or reload Farmer.
 
@@ -87,7 +87,7 @@ mvn -Ppaper-1.21 clean verify
 mvn -Ppaper-26 clean verify
 ```
 
-The release artifact is written to `target/Farmer-SpawnerKiller-1.1.2.jar`. Dependencies are provided by the server/Farmer module loader and are not shaded into the module.
+The release artifact is written to `target/Farmer-SpawnerKiller-1.1.3.jar`. Dependencies are provided by the server/Farmer module loader and are not shaded into the module.
 
 ## Security and lifecycle notes
 

@@ -3,7 +3,6 @@ package xyz.geik.farmer.modules.spawnerkiller.platform;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Mob;
-import xyz.geik.farmer.api.FarmerCompatibilityAPI;
 
 /**
  * Verifies the Paper and Farmer APIs used by SpawnerKiller before activation.
@@ -22,9 +21,12 @@ public final class PaperPlatform {
 
     public static boolean isSupported() {
         try {
-            FarmerCompatibilityAPI.requireModuleApi(2);
+            ClassLoader loader = PaperPlatform.class.getClassLoader();
+            Class<?> farmerCompatibility = Class.forName(
+                    "xyz.geik.farmer.api.FarmerCompatibilityAPI", false, loader);
+            farmerCompatibility.getMethod("requireModuleApi", int.class).invoke(null, 2);
             for (String className : REQUIRED_CLASSES)
-                Class.forName(className, false, PaperPlatform.class.getClassLoader());
+                Class.forName(className, false, loader);
             Bukkit.class.getMethod("getRegionScheduler");
             Bukkit.class.getMethod("getGlobalRegionScheduler");
             Bukkit.class.getMethod("getAsyncScheduler");
