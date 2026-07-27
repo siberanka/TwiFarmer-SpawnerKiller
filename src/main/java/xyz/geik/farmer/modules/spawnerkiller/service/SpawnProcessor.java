@@ -11,6 +11,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.ExperienceOrb;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Mob;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
@@ -19,6 +20,7 @@ import xyz.geik.farmer.api.FarmerAPI;
 import xyz.geik.farmer.api.managers.FarmerManager;
 import xyz.geik.farmer.model.Farmer;
 import xyz.geik.farmer.modules.spawnerkiller.SpawnerKiller;
+import xyz.geik.farmer.modules.spawnerkiller.compatibility.EntityTypeNames;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,13 +42,6 @@ import java.util.logging.Level;
  * @author siberanka
  */
 public final class SpawnProcessor implements AutoCloseable {
-
-    private static final Set<String> PASSIVE_TYPES = Set.of(
-            "OCELOT", "CHICKEN", "COW", "HORSE", "PIG", "RABBIT", "SHEEP", "SQUID",
-            "WOLF", "BAT", "DONKEY", "MULE", "LLAMA", "TRADER_LLAMA", "MUSHROOM_COW",
-            "MOOSHROOM", "PARROT", "POLAR_BEAR", "BEE", "STRIDER", "COD", "FOX",
-            "PIGLIN", "SALMON", "TROPICAL_FISH", "TROPICALFISH", "SKELETON_HORSE",
-            "SKELETONHORSE", "TURTLE", "PANDA", "DOLPHIN");
 
     private final SpawnerKiller module;
     private final Plugin plugin;
@@ -261,20 +256,22 @@ public final class SpawnProcessor implements AutoCloseable {
         }
 
         EntityType entityType = entity.getType();
+        int experiencePerEntity = possibleExperienceReward(entity);
         if (optimization.enable() && optimization.asyncStackDrops()
-                && scheduleAsyncStackDrops(entity, stacked, amount, entityType, optimization, 0)) {
+                && scheduleAsyncStackDrops(entity, stacked, amount, entityType,
+                experiencePerEntity, optimization, 0)) {
             return true;
         }
 
         List<ItemStack> drops = entityType == EntityType.BLAZE
                 ? Collections.emptyList()
                 : cloneValidDrops(stacked.getDrops(0));
-        commitWildStack(entity, stacked, amount, entityType, drops, optimization);
+        commitWildStack(entity, stacked, amount, entityType, experiencePerEntity, drops, optimization);
         return true;
     }
 
     private boolean scheduleAsyncStackDrops(LivingEntity entity, StackedEntity stacked, int amount,
-                                            EntityType entityType,
+                                            EntityType entityType, int experiencePerEntity,
                                             SpawnerKiller.OptimizationSettings optimization,
                                             int attempt) {
         if (closed.get() || asyncDropPlans.incrementAndGet() > optimization.maxQueuedEntities()) {
@@ -290,7 +287,8 @@ public final class SpawnProcessor implements AutoCloseable {
                     List<ItemStack> drops = entityType == EntityType.BLAZE
                             ? Collections.emptyList()
                             : cloneValidDrops(stacked.getDrops(0, amount));
-                    scheduleDropCommit(entity, stackedId, amount, entityType, drops, optimization, attempt);
+                    scheduleDropCommit(entity, stackedId, amount, entityType, experiencePerEntity,
+                            drops, optimization, attempt);
                 }
                 catch (Exception | LinkageError exception) {
                     scheduleFailedDropRemoval(entity, exception);
@@ -306,7 +304,7 @@ public final class SpawnProcessor implements AutoCloseable {
     }
 
     private void scheduleDropCommit(LivingEntity entity, UUID stackedId, int plannedAmount,
-                                    EntityType entityType, List<ItemStack> drops,
+                                    EntityType entityType, int experiencePerEntity, List<ItemStack> drops,
                                     SpawnerKiller.OptimizationSettings optimization, int attempt) {
         boolean scheduled = entity.getScheduler().execute(plugin, () -> {
             asyncDropPlans.updateAndGet(value -> Math.max(0, value - 1));
@@ -322,12 +320,14 @@ public final class SpawnProcessor implements AutoCloseable {
                 if (!stackedId.equals(current.getUniqueId()) || currentAmount != plannedAmount) {
                     if (attempt < 2 && currentAmount > 0) {
                         int safeAmount = Math.min(currentAmount, optimization.maxStackProcessAmount());
-                        if (!scheduleAsyncStackDrops(entity, current, safeAmount, entity.getType(), optimization,
-                                attempt + 1)) {
+                        int currentExperience = possibleExperienceReward(entity);
+                        if (!scheduleAsyncStackDrops(entity, current, safeAmount, entity.getType(),
+                                currentExperience, optimization, attempt + 1)) {
                             List<ItemStack> fallback = entity.getType() == EntityType.BLAZE
                                     ? Collections.emptyList()
                                     : cloneValidDrops(current.getDrops(0));
-                            commitWildStack(entity, current, safeAmount, entity.getType(), fallback, optimization);
+                            commitWildStack(entity, current, safeAmount, entity.getType(),
+                                    currentExperience, fallback, optimization);
                         }
                     }
                     else {
@@ -336,7 +336,8 @@ public final class SpawnProcessor implements AutoCloseable {
                     }
                     return;
                 }
-                commitWildStack(entity, current, plannedAmount, entityType, drops, optimization);
+                commitWildStack(entity, current, plannedAmount, entityType,
+                        experiencePerEntity, drops, optimization);
             }
             catch (Exception | LinkageError exception) {
                 audit("drop-plan-commit", "An async drop plan failed validation and was removed fail-closed.", exception);
@@ -364,13 +365,13 @@ public final class SpawnProcessor implements AutoCloseable {
     }
 
     private void commitWildStack(LivingEntity entity, StackedEntity stacked, int amount,
-                                 EntityType entityType, List<ItemStack> drops,
+                                 EntityType entityType, int experiencePerEntity, List<ItemStack> drops,
                                  SpawnerKiller.OptimizationSettings optimization) {
         Location location = entity.getLocation().clone();
         stacked.remove();
         boolean batch = optimization.enable() && optimization.batchDrops();
         dropItems(location, drops, batch);
-        createLegacyRewards(location, entityType, amount, batch);
+        createStackRewards(location, entityType, experiencePerEntity, amount, batch);
     }
 
     private static List<ItemStack> cloneValidDrops(List<ItemStack> provided) {
@@ -398,31 +399,14 @@ public final class SpawnProcessor implements AutoCloseable {
         }
     }
 
-    private void createLegacyRewards(Location location, EntityType entityType, int amount, boolean batchDrops) {
-        String type = entityType.name();
-        if (PASSIVE_TYPES.contains(type)) {
-            spawnExperience(location, safeMultiply(ThreadLocalRandom.current().nextInt(1, 4), amount));
-            return;
-        }
-        if (entityType == EntityType.GUARDIAN || entityType == EntityType.BLAZE) {
-            spawnExperience(location, safeMultiply(10, amount));
-            if (entityType == EntityType.BLAZE) {
-                dropMaterial(location, Material.BLAZE_ROD, sampleCount(amount, 0.51D), batchDrops);
-            }
-            return;
-        }
-        if (entityType == EntityType.IRON_GOLEM || type.contains("SNOW_GOLEM")
-                || entityType == EntityType.VILLAGER || type.contains("WANDERING_TRADER")) {
-            return;
-        }
-        if (entityType == EntityType.SLIME || entityType == EntityType.MAGMA_CUBE) {
-            spawnExperience(location, safeMultiply(3, amount));
-            return;
+    private void createStackRewards(Location location, EntityType entityType, int experiencePerEntity,
+                                    int amount, boolean batchDrops) {
+        String type = EntityTypeNames.stableName(entityType);
+        if (entityType == EntityType.BLAZE) {
+            dropMaterial(location, Material.BLAZE_ROD, sampleCount(amount, 0.51D), batchDrops);
         }
         if (type.contains("PHANTOM")) {
             dropMaterial(location, Material.PHANTOM_MEMBRANE, sampleCount(amount, 0.51D), batchDrops);
-            spawnExperience(location, safeMultiply(5, amount));
-            return;
         }
         if (type.contains("SPIDER")) {
             int twoStrings;
@@ -448,7 +432,15 @@ public final class SpawnProcessor implements AutoCloseable {
             dropMaterial(location, Material.STRING, safeAdd(safeMultiply(twoStrings, 2), oneString), batchDrops);
             dropMaterial(location, Material.SPIDER_EYE, sampleCount(amount, 0.21D), batchDrops);
         }
-        spawnExperience(location, safeMultiply(5, amount));
+        spawnExperience(location, safeStackExperience(experiencePerEntity, amount));
+    }
+
+    private static int possibleExperienceReward(LivingEntity entity) {
+        return entity instanceof Mob mob ? Math.max(0, mob.getPossibleExperienceReward()) : 0;
+    }
+
+    static int safeStackExperience(int experiencePerEntity, int amount) {
+        return safeMultiply(Math.max(0, experiencePerEntity), Math.max(0, amount));
     }
 
     private void dropItems(Location location, List<ItemStack> drops, boolean batch) {

@@ -2,7 +2,7 @@ package xyz.geik.farmer.modules.spawnerkiller.configuration;
 
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.entity.EntityType;
+import xyz.geik.farmer.modules.spawnerkiller.compatibility.EntityTypeNames;
 
 import java.io.File;
 import java.io.IOException;
@@ -340,11 +340,8 @@ public final class ConfigSchemaRepair {
                     if (!(item instanceof String string) || string.length() > 128) {
                         return INVALID;
                     }
-                    String type = string.trim().toUpperCase(Locale.ROOT);
-                    try {
-                        EntityType.valueOf(type);
-                    }
-                    catch (IllegalArgumentException exception) {
+                    String type = EntityTypeNames.normalizeConfigured(string);
+                    if (type == null) {
                         return INVALID;
                     }
                     if (!normalized.contains(type)) {

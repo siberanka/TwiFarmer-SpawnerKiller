@@ -9,9 +9,11 @@ import xyz.geik.farmer.modules.FarmerModule;
 import xyz.geik.farmer.modules.spawnerkiller.configuration.ConfigFile;
 import xyz.geik.farmer.modules.spawnerkiller.configuration.ConfigSchemaRepair;
 import xyz.geik.farmer.modules.spawnerkiller.configuration.UpdateSettings;
+import xyz.geik.farmer.modules.spawnerkiller.compatibility.EntityTypeNames;
 import xyz.geik.farmer.modules.spawnerkiller.handlers.SpawnerKillerEvent;
 import xyz.geik.farmer.modules.spawnerkiller.handlers.SpawnerKillerGuiCreateEvent;
 import xyz.geik.farmer.modules.spawnerkiller.handlers.SpawnerMetaEvent;
+import xyz.geik.farmer.modules.spawnerkiller.platform.PaperPlatform;
 import xyz.geik.farmer.modules.spawnerkiller.service.SpawnProcessor;
 import xyz.geik.farmer.modules.spawnerkiller.update.UpdateChecker;
 import xyz.geik.farmer.shades.storage.Config;
@@ -68,7 +70,7 @@ public class SpawnerKiller extends FarmerModule {
         instance = this;
         setHasGui(true);
 
-        if (!isPaperRuntime()) {
+        if (!PaperPlatform.isSupported()) {
             Main.getInstance().getLogger().severe(
                     "SpawnerKiller requires Paper, Folia or Leaf. Plain Bukkit/Spigot is not supported.");
             operational = false;
@@ -98,7 +100,7 @@ public class SpawnerKiller extends FarmerModule {
 
     @Override
     public void onReload() {
-        if (!isPaperRuntime()) {
+        if (!PaperPlatform.isSupported()) {
             return;
         }
 
@@ -277,7 +279,7 @@ public class SpawnerKiller extends FarmerModule {
             return false;
         }
         RuntimeSettings snapshot = settings;
-        String name = type.name();
+        String name = EntityTypeNames.stableName(type);
         if ("whitelist".equals(snapshot.mode())) {
             return snapshot.whitelist().contains(name);
         }
@@ -330,8 +332,9 @@ public class SpawnerKiller extends FarmerModule {
         }
         Set<String> normalized = new LinkedHashSet<>();
         for (String entry : configured) {
-            if (entry != null) {
-                normalized.add(entry.trim().toUpperCase(Locale.ROOT));
+            String name = EntityTypeNames.normalizeConfigured(entry);
+            if (name != null) {
+                normalized.add(name);
             }
         }
         return Collections.unmodifiableSet(normalized);
@@ -349,18 +352,6 @@ public class SpawnerKiller extends FarmerModule {
             return "null";
         }
         return value.replaceAll("[\\r\\n\\t]", "_").substring(0, Math.min(value.length(), 32));
-    }
-
-    private static boolean isPaperRuntime() {
-        try {
-            Class.forName("io.papermc.paper.threadedregions.scheduler.EntityScheduler", false,
-                    SpawnerKiller.class.getClassLoader());
-            Bukkit.class.getMethod("getAsyncScheduler");
-            return true;
-        }
-        catch (ReflectiveOperationException | LinkageError exception) {
-            return false;
-        }
     }
 
     private void consoleMessage(String message) {

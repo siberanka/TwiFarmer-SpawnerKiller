@@ -6,7 +6,7 @@
 
     <groupId>xyz.geik.farmer</groupId>
     <artifactId>Farmer-SpawnerKiller</artifactId>
-    <version>1.1.1</version>
+    <version>1.1.2</version>
 
     <name>Farmer SpawnerKiller</name>
     <description>Paper, Folia and Leaf compatible SpawnerKiller module for Farmer.</description>
@@ -47,9 +47,27 @@
         <paper.version>1.21.8-R0.1-SNAPSHOT</paper.version>
         <spawnermeta.version>25.8</spawnermeta.version>
         <wildstacker.version>2025.2</wildstacker.version>
-        <farmer.version>v6-b113</farmer.version>
+        <farmer.version>v6-b123</farmer.version>
         <gson.version>2.11.0</gson.version>
     </properties>
+
+    <profiles>
+        <profile>
+            <id>paper-1.21</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <paper.version>1.21.8-R0.1-SNAPSHOT</paper.version>
+            </properties>
+        </profile>
+        <profile>
+            <id>paper-26</id>
+            <properties>
+                <paper.version>26.1.2.build.74-stable</paper.version>
+            </properties>
+        </profile>
+    </profiles>
 
     <!-- Dependencies -->
     <dependencies>
@@ -83,10 +101,16 @@
         </dependency>
         <!-- Farmer -->
         <dependency>
-            <groupId>com.github.Geik-xyz</groupId>
-            <artifactId>Farmer-v6</artifactId>
+            <groupId>com.github.siberanka</groupId>
+            <artifactId>TwiFarmer</artifactId>
             <version>${farmer.version}</version>
             <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.google.code.gson</groupId>

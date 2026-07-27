@@ -57,6 +57,20 @@ class ConfigSchemaRepairTest {
     }
 
     @Test
+    void preservesAndCanonicalizesPaper26AndLegacyEntityNames() throws Exception {
+        Path config = temporaryDirectory.resolve("config.yml");
+        Files.writeString(config, "whitelist: [minecraft:camel_husk, mushroom_cow, ZOMBIE_NAUTILUS]\n",
+                StandardCharsets.UTF_8);
+
+        ConfigSchemaRepair.repairConfig(config.toFile(), LOGGER);
+
+        YamlConfiguration repaired = YamlConfiguration.loadConfiguration(config.toFile());
+        assertEquals(java.util.List.of("CAMEL_HUSK", "MOOSHROOM", "ZOMBIE_NAUTILUS"),
+                repaired.getStringList("whitelist"));
+        assertEquals(1L, countBackups());
+    }
+
+    @Test
     void backsUpAndRegeneratesMalformedYaml() throws Exception {
         Path config = temporaryDirectory.resolve("config.yml");
         Files.writeString(config, "status: [unterminated\n", StandardCharsets.UTF_8);
