@@ -33,6 +33,7 @@ class ConfigSchemaRepairTest {
 
         YamlConfiguration repaired = YamlConfiguration.loadConfiguration(config.toFile());
         assertTrue(repaired.getBoolean("status"));
+        assertEquals(1, repaired.getInt("required-farmer-level"));
         assertFalse(repaired.getBoolean("optimize-module.enable"));
         assertTrue(repaired.getBoolean("update-checker.enable"));
         assertEquals(6, repaired.getInt("update-checker.check-interval-hours"));
@@ -44,13 +45,15 @@ class ConfigSchemaRepairTest {
     @Test
     void backsUpAndRepairsInvalidConfigValues() throws Exception {
         Path config = temporaryDirectory.resolve("config.yml");
-        Files.writeString(config, "status: maybe\nmode: nonsense\nblacklist: [NOT_A_REAL_ENTITY]\n"
+        Files.writeString(config, "status: maybe\nrequired-farmer-level: 0\n"
+                + "mode: nonsense\nblacklist: [NOT_A_REAL_ENTITY]\n"
                 + "optimize-module:\n  enable: true\n  max-queued-entities: -5\n", StandardCharsets.UTF_8);
 
         ConfigSchemaRepair.repairConfig(config.toFile(), LOGGER);
 
         YamlConfiguration repaired = YamlConfiguration.loadConfiguration(config.toFile());
         assertFalse(repaired.getBoolean("status"));
+        assertEquals(1, repaired.getInt("required-farmer-level"));
         assertEquals("blacklist", repaired.getString("mode"));
         assertEquals(512, repaired.getInt("optimize-module.max-queued-entities"));
         assertEquals(1L, countBackups());
@@ -87,9 +90,13 @@ class ConfigSchemaRepairTest {
     void repairsLanguageShapeAfterBackingUpInvalidContent() throws Exception {
         Path language = temporaryDirectory.resolve("en.yml");
         Files.writeString(language, "enabled: []\n", StandardCharsets.UTF_8);
-        String defaults = "enabled: '&aEnabled'\ndisabled: '&cDisabled'\nmoduleGui:\n"
+        String defaults = "enabled: '&aEnabled'\ndisabled: '&cDisabled'\nlocked: '&cLocked'\n"
+                + "module-name: 'Spawner Killer'\n"
+                + "level-required: 'Requires {required_level}; current {current_level}'\nmoduleGui:\n"
+                + "  click-to-toggle: 'Toggle'\n  upgrade-to-unlock: 'Upgrade to {required_level}'\n"
                 + "  icon:\n    guiInterface: 'k'\n    name: '&eSpawner Killer'\n"
-                + "    skull: 'texture'\n    lore: ['Status: {status}']\n";
+                + "    skull: 'texture'\n"
+                + "    lore: ['Required: {required_level}', 'Status: {status}', '{action}']\n";
 
         ConfigSchemaRepair.repairLanguage(language.toFile(),
                 new ByteArrayInputStream(defaults.getBytes(StandardCharsets.UTF_8)), LOGGER);
@@ -97,6 +104,9 @@ class ConfigSchemaRepairTest {
         YamlConfiguration repaired = YamlConfiguration.loadConfiguration(language.toFile());
         assertEquals("&aEnabled", repaired.getString("enabled"));
         assertEquals("&cDisabled", repaired.getString("disabled"));
+        assertEquals("Spawner Killer", repaired.getString("module-name"));
+        assertTrue(repaired.getString("level-required").contains("{current_level}"));
+        assertTrue(repaired.getStringList("moduleGui.icon.lore").contains("{action}"));
         assertEquals(1L, countBackups());
     }
 
@@ -110,6 +120,7 @@ class ConfigSchemaRepairTest {
         assertTrue(yaml.isConfigurationSection("optimize-module"));
         assertTrue(yaml.contains("optimize-module.async-stack-drops"));
         assertTrue(yaml.isConfigurationSection("update-checker"));
+        assertEquals(1, yaml.getInt("required-farmer-level"));
         assertTrue(loaded.getUpdateChecker().isEnable());
         assertEquals(6, yaml.getInt("update-checker.check-interval-hours"));
         assertEquals(64, yaml.getInt("optimize-module.max-entities-per-run"));

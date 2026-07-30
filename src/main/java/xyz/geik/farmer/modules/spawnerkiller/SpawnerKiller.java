@@ -218,6 +218,8 @@ public class SpawnerKiller extends FarmerModule {
                 blacklist,
                 optimization);
         setDefaultState(configFile.isDefaultStatus());
+        setRequiredFarmerLevel(configFile.getRequiredFarmerLevel());
+        setDisplayName(getLang().getString("module-name"));
     }
 
     private void registerHandlers() {

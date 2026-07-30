@@ -12,8 +12,10 @@ import xyz.geik.farmer.api.handlers.FarmerModuleGuiCreateEvent;
 import xyz.geik.farmer.Main;
 import xyz.geik.farmer.helpers.gui.GuiHelper;
 import xyz.geik.farmer.model.Farmer;
+import xyz.geik.farmer.model.FarmerLevel;
 import xyz.geik.farmer.modules.spawnerkiller.SpawnerKiller;
 import xyz.geik.glib.chat.ChatUtils;
+import xyz.geik.glib.chat.Placeholder;
 import xyz.geik.glib.shades.inventorygui.DynamicGuiElement;
 import xyz.geik.glib.shades.inventorygui.StaticGuiElement;
 
@@ -68,12 +70,16 @@ public class SpawnerKillerGuiCreateEvent implements Listener {
                                 e.getPlayer().closeInventory();
                                 return true;
                             }
-                            // If player don't have permission do nothing
-                            if (!e.getPlayer().hasPermission(module.getCustomPerm()))
-                                return true;
                             long now = System.currentTimeMillis();
                             Long previous = lastClicks.put(e.getPlayer().getUniqueId(), now);
                             if (previous != null && now - previous < CLICK_COOLDOWN_MS)
+                                return true;
+                            if (!module.isAvailableFor(e.getFarmer())) {
+                                sendLevelRequired(e.getFarmer(), e.getPlayer(), module);
+                                return true;
+                            }
+                            // If player don't have permission do nothing
+                            if (!e.getPlayer().hasPermission(module.getCustomPerm()))
                                 return true;
                             // Change attribute
                             synchronized (e.getFarmer()) {
@@ -99,16 +105,42 @@ public class SpawnerKillerGuiCreateEvent implements Listener {
         if (meta == null) {
             return item;
         }
-        String status = farmer.getAttributeStatus("spawnerkiller") ?
-                module.getLang().getString("enabled") : module.getLang().getString("disabled");
+        int currentLevel = FarmerLevel.getLevelNumber(farmer.getLevel());
+        boolean available = module.isAvailableFor(farmer);
+        String status = available
+                ? (farmer.getAttributeStatus("spawnerkiller")
+                    ? module.getLang().getString("enabled")
+                    : module.getLang().getString("disabled"))
+                : module.getLang().getString("locked");
+        String action = available
+                ? module.getLang().getString("moduleGui.click-to-toggle")
+                : ChatUtils.replacePlaceholders(
+                        module.getLang().getString("moduleGui.upgrade-to-unlock"),
+                        new Placeholder("{required_level}", String.valueOf(module.getRequiredFarmerLevel())));
         List<String> lore = meta.getLore();
         if (lore == null) {
             lore = Collections.emptyList();
         }
-        meta.setLore(lore.stream().map(line -> ChatUtils.color(line.replace("{status}", status)))
+        meta.setLore(lore.stream().map(line -> ChatUtils.color(ChatUtils.replacePlaceholders(
+                        line,
+                        new Placeholder("{status}", status),
+                        new Placeholder("{required_level}", String.valueOf(module.getRequiredFarmerLevel())),
+                        new Placeholder("{current_level}", String.valueOf(currentLevel)),
+                        new Placeholder("{action}", action))))
                 .collect(Collectors.toList()));
         item.setItemMeta(meta);
         return item;
+    }
+
+    private void sendLevelRequired(
+            @NotNull Farmer farmer,
+            org.bukkit.entity.Player player,
+            @NotNull SpawnerKiller module
+    ) {
+        ChatUtils.sendMessage(player, ChatUtils.replacePlaceholders(
+                module.getLang().getString("level-required"),
+                new Placeholder("{required_level}", String.valueOf(module.getRequiredFarmerLevel())),
+                new Placeholder("{current_level}", String.valueOf(FarmerLevel.getLevelNumber(farmer.getLevel())))));
     }
 
     @EventHandler

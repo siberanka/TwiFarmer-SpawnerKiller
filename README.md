@@ -8,7 +8,7 @@ Maintainers/authors: Geik contributors and **siberanka**.
 
 - Minecraft **1.21.x** and **26.x**
 - **Paper**, **Folia**, and **Leaf**
-- Farmer **v6-b123+**
+- Farmer **v6-b125+**
 - Optional SpawnerMeta **25.8** and WildStacker API **2025.2** integrations
 - Java 21 for the 1.21.x server line; Paper 26.x server runtime requires Java 25
 
@@ -17,7 +17,7 @@ Plain Bukkit and Spigot servers are intentionally unsupported. The module verifi
 ## Installation
 
 1. Stop the server.
-2. Place `Farmer-SpawnerKiller-1.1.3.jar` in `plugins/Farmer/modules/`.
+2. Place `Farmer-SpawnerKiller-1.1.4.jar` in `plugins/Farmer/modules/`.
 3. Start the server once to generate `plugins/Farmer/modules/spawnerkiller/config.yml` and the selected language file.
 4. Set `status: true`, then restart or reload Farmer.
 
@@ -32,6 +32,11 @@ Plain Bukkit and Spigot servers are intentionally unsupported. The module verifi
 - Applies queue back-pressure, regional limits, legal drop batching, stack-size ceilings, overflow-safe XP calculations, and rate-limited operational logging.
 - Uses each mob's runtime Paper XP reward for WildStacker batches, so new 26.x entity types do not fall through a hard-coded reward table.
 - Automatically adds missing config/language entries. Malformed, wrongly typed, meaningless, oversized, or invalid entries are backed up to `*.bak-<UTC timestamp>` before repair.
+- Unlocks at Farmer level 1 by default; `required-farmer-level` can move the module to any later Farmer upgrade.
+
+Raising `required-farmer-level` immediately prevents existing lower-level Farmers
+from processing spawns or toggling the module. Their saved preference is retained,
+then becomes effective again once the configured level is reached or lowered.
 
 ## Update checker
 
@@ -87,7 +92,7 @@ mvn -Ppaper-1.21 clean verify
 mvn -Ppaper-26 clean verify
 ```
 
-The release artifact is written to `target/Farmer-SpawnerKiller-1.1.3.jar`. Dependencies are provided by the server/Farmer module loader and are not shaded into the module.
+The release artifact is written to `target/Farmer-SpawnerKiller-1.1.4.jar`. Dependencies are provided by the server/Farmer module loader and are not shaded into the module.
 
 ## Security and lifecycle notes
 

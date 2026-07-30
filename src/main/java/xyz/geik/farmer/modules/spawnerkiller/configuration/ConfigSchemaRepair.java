@@ -177,6 +177,7 @@ public final class ConfigSchemaRepair {
         schema.put("cookFoods", Rule.bool(true));
         schema.put("removeMob", Rule.bool(true));
         schema.put("defaultStatus", Rule.bool(true));
+        schema.put("required-farmer-level", Rule.integer(1, 1, 1000));
         schema.put("customPerm", Rule.string("farmer.spawnerkiller",
                 value -> value.matches("[A-Za-z0-9._-]{1,128}"), String::trim));
         schema.put("mode", Rule.string("blacklist",
@@ -222,6 +223,13 @@ public final class ConfigSchemaRepair {
                 return !string.isBlank() && string.contains("{module}") && string.contains("{current}")
                         && string.contains("{latest}") && string.contains("{url}");
             }
+            if ("level-required".equals(path)) {
+                return !string.isBlank() && string.contains("{required_level}")
+                        && string.contains("{current_level}");
+            }
+            if ("moduleGui.upgrade-to-unlock".equals(path)) {
+                return !string.isBlank() && string.contains("{required_level}");
+            }
             return !string.isBlank() || path.contains(".lore");
         }
         if (value instanceof Collection<?> collection) {
@@ -232,6 +240,11 @@ public final class ConfigSchemaRepair {
                 if (!(item instanceof String string) || string.length() > 1024) {
                     return false;
                 }
+            }
+            if ("moduleGui.icon.lore".equals(path)) {
+                String lore = String.join("\n", collection.stream().map(String.class::cast).toList());
+                return lore.contains("{status}") && lore.contains("{required_level}")
+                        && lore.contains("{action}");
             }
         }
         return true;

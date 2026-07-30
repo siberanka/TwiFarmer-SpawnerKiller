@@ -24,7 +24,7 @@ public final class PaperPlatform {
             ClassLoader loader = PaperPlatform.class.getClassLoader();
             Class<?> farmerCompatibility = Class.forName(
                     "xyz.geik.farmer.api.FarmerCompatibilityAPI", false, loader);
-            farmerCompatibility.getMethod("requireModuleApi", int.class).invoke(null, 2);
+            farmerCompatibility.getMethod("requireModuleApi", int.class).invoke(null, 3);
             for (String className : REQUIRED_CLASSES)
                 Class.forName(className, false, loader);
             Bukkit.class.getMethod("getRegionScheduler");

@@ -43,6 +43,11 @@ public class ConfigFile extends OkaeriConfig {
             "if set false, farmer will be disable spawner killer by default"})
     private boolean defaultStatus = true;
 
+    @CustomKey("required-farmer-level")
+    @Comment({"Minimum one-based Farmer level required to use Spawner Killer.",
+            "Raise this value to unlock the module at a later Farmer upgrade."})
+    private int requiredFarmerLevel = 1;
+
     @Comment({"custom perm for spawner killer status changer"})
     private String customPerm = "farmer.spawnerkiller";
 
