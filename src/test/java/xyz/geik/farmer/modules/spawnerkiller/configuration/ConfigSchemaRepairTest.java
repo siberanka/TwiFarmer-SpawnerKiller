@@ -87,6 +87,49 @@ class ConfigSchemaRepairTest {
     }
 
     @Test
+    void acceptsIntegralYamlNumbersIdempotentlyWithoutBackup() throws Exception {
+        Path config = temporaryDirectory.resolve("config.yml");
+        Files.writeString(config, "status: true\noptimize-module:\n  audit-log-rate-limit-ms: 5000\n",
+                StandardCharsets.UTF_8);
+
+        ConfigSchemaRepair.repairConfig(config.toFile(), LOGGER);
+        String firstRepair = Files.readString(config, StandardCharsets.UTF_8);
+        ConfigSchemaRepair.repairConfig(config.toFile(), LOGGER);
+
+        assertEquals(firstRepair, Files.readString(config, StandardCharsets.UTF_8));
+        assertEquals(0L, countBackups());
+    }
+
+    @Test
+    void rejectsFractionalValuesForIntegralSettings() throws Exception {
+        Path config = temporaryDirectory.resolve("config.yml");
+        Files.writeString(config, "optimize-module:\n  audit-log-rate-limit-ms: 5000.5\n",
+                StandardCharsets.UTF_8);
+
+        ConfigSchemaRepair.repairConfig(config.toFile(), LOGGER);
+
+        YamlConfiguration repaired = YamlConfiguration.loadConfiguration(config.toFile());
+        assertEquals(5000L, repaired.getLong("optimize-module.audit-log-rate-limit-ms"));
+        assertEquals(1L, countBackups());
+    }
+
+    @Test
+    void retainsOnlyTheNewestBoundedBackupHistory() throws Exception {
+        Path config = temporaryDirectory.resolve("config.yml");
+        Files.writeString(config, "status: true\n", StandardCharsets.UTF_8);
+        for (int index = 0; index < ConfigSchemaRepair.MAX_BACKUPS_PER_FILE + 5; index++) {
+            Files.writeString(temporaryDirectory.resolve(String.format(
+                    "config.yml.bak-20260101-000000-%03d", index)), "backup", StandardCharsets.UTF_8);
+        }
+
+        ConfigSchemaRepair.repairConfig(config.toFile(), LOGGER);
+
+        assertEquals(ConfigSchemaRepair.MAX_BACKUPS_PER_FILE, countBackups());
+        assertFalse(Files.exists(temporaryDirectory.resolve("config.yml.bak-20260101-000000-000")));
+        assertTrue(Files.exists(temporaryDirectory.resolve("config.yml.bak-20260101-000000-024")));
+    }
+
+    @Test
     void repairsLanguageShapeAfterBackingUpInvalidContent() throws Exception {
         Path language = temporaryDirectory.resolve("en.yml");
         Files.writeString(language, "enabled: []\n", StandardCharsets.UTF_8);

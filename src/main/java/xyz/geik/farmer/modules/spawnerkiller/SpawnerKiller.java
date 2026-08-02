@@ -136,10 +136,13 @@ public class SpawnerKiller extends FarmerModule {
         return lifecycleEpoch.get();
     }
 
-    private void loadFilesAndSettings() throws IOException {
+    void loadFilesAndSettings() throws IOException {
         setupFile();
-        applySettings();
-        loadAndRepairLanguage();
+        Config language = loadAndRepairLanguage();
+        if (language == null) {
+            throw new IOException("SpawnerKiller language initialization returned no configuration");
+        }
+        applySettings(language);
     }
 
     public void setupFile() throws IOException {
@@ -165,7 +168,7 @@ public class SpawnerKiller extends FarmerModule {
         }
     }
 
-    private void loadAndRepairLanguage() throws IOException {
+    Config loadAndRepairLanguage() throws IOException {
         String requested = Main.getConfigFile().getSettings().getLang();
         String language = sanitizeLanguage(requested);
         if (!BUNDLED_LANGUAGES.contains(language)) {
@@ -185,9 +188,14 @@ public class SpawnerKiller extends FarmerModule {
             ConfigSchemaRepair.repairLanguage(languageFile, defaults, Main.getInstance().getLogger());
         }
         setLang(language, getClass());
+        Config loadedLanguage = getLang();
+        if (loadedLanguage == null) {
+            throw new IOException("SpawnerKiller could not initialize language '" + language + "'");
+        }
+        return loadedLanguage;
     }
 
-    private void applySettings() {
+    void applySettings(Config language) {
         String mode = "whitelist".equalsIgnoreCase(configFile.getMode()) ? "whitelist" : "blacklist";
         Set<String> whitelist = normalizeEntityNames(configFile.getWhitelist());
         Set<String> blacklist = normalizeEntityNames(configFile.getBlacklist());
@@ -219,7 +227,7 @@ public class SpawnerKiller extends FarmerModule {
                 optimization);
         setDefaultState(configFile.isDefaultStatus());
         setRequiredFarmerLevel(configFile.getRequiredFarmerLevel());
-        setDisplayName(getLang().getString("module-name"));
+        setDisplayName(language.getString("module-name"));
     }
 
     private void registerHandlers() {

@@ -11,6 +11,7 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
@@ -19,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -26,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 /**
  * Repairs module YAML before the normal loaders see it. Invalid data is never
@@ -36,6 +39,7 @@ import java.util.logging.Logger;
 public final class ConfigSchemaRepair {
 
     private static final long MAX_YAML_BYTES = 2L * 1024L * 1024L;
+    static final int MAX_BACKUPS_PER_FILE = 20;
     private static final DateTimeFormatter BACKUP_TIME =
             DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").withZone(ZoneOffset.UTC);
 
@@ -81,7 +85,7 @@ public final class ConfigSchemaRepair {
                 invalid = true;
                 changed = true;
             }
-            else if (!Objects.equals(current, normalized)) {
+            else if (!equivalentValues(current, normalized)) {
                 replacements.put(path, normalized);
                 invalid = true;
                 changed = true;
@@ -95,6 +99,7 @@ public final class ConfigSchemaRepair {
         if (changed) {
             saveAtomically(yaml, file.toPath());
         }
+        pruneBackups(file.toPath(), logger);
     }
 
     public static void repairLanguage(File file, InputStream defaultsStream, Logger logger) throws IOException {
@@ -146,6 +151,7 @@ public final class ConfigSchemaRepair {
         if (changed) {
             saveAtomically(yaml, file.toPath());
         }
+        pruneBackups(file.toPath(), logger);
     }
 
     private static LoadResult load(Path file, Logger logger) throws IOException {
@@ -213,6 +219,18 @@ public final class ConfigSchemaRepair {
         return expected != null && current != null && expected.getClass().isInstance(current);
     }
 
+    private static boolean equivalentValues(Object current, Object normalized) {
+        if (isIntegralNumber(current) && isIntegralNumber(normalized)) {
+            return ((Number) current).longValue() == ((Number) normalized).longValue();
+        }
+        return Objects.equals(current, normalized);
+    }
+
+    private static boolean isIntegralNumber(Object value) {
+        return value instanceof Byte || value instanceof Short
+                || value instanceof Integer || value instanceof Long;
+    }
+
     private static boolean meaningfulLanguageValue(String path, Object value) {
         if (value instanceof String string) {
             int limit = path.endsWith(".skull") ? 8192 : 1024;
@@ -270,8 +288,31 @@ public final class ConfigSchemaRepair {
             throw new IOException("Could not allocate a unique YAML backup name for " + file.getFileName());
         }
         Files.copy(file, backup, StandardCopyOption.COPY_ATTRIBUTES);
-        logger.warning("Invalid YAML backed up to " + backup.getFileName());
+        logger.warning("Invalid YAML data backed up to " + backup.getFileName());
         return backup;
+    }
+
+    private static void pruneBackups(Path file, Logger logger) {
+        Path normalized = file.toAbsolutePath().normalize();
+        Path parent = normalized.getParent();
+        if (parent == null || !Files.isDirectory(parent)) {
+            return;
+        }
+        String prefix = normalized.getFileName() + ".bak-";
+        try (Stream<Path> entries = Files.list(parent)) {
+            List<Path> backups = entries
+                    .filter(path -> path.getFileName().toString().startsWith(prefix))
+                    .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                    .sorted(Comparator.comparing((Path path) -> path.getFileName().toString()).reversed())
+                    .toList();
+            for (int index = MAX_BACKUPS_PER_FILE; index < backups.size(); index++) {
+                Files.deleteIfExists(backups.get(index));
+            }
+        }
+        catch (IOException exception) {
+            logger.warning("Could not prune old YAML backups for " + normalized.getFileName()
+                    + ": " + exception.getClass().getSimpleName());
+        }
     }
 
     private static void saveAtomically(YamlConfiguration yaml, Path destination) throws IOException {
@@ -314,9 +355,10 @@ public final class ConfigSchemaRepair {
 
         private static Rule integer(int defaultValue, int minimum, int maximum) {
             return new Rule(defaultValue, value -> {
-                if (!(value instanceof Number number)) {
+                if (!isIntegralNumber(value)) {
                     return INVALID;
                 }
+                Number number = (Number) value;
                 long parsed = number.longValue();
                 return parsed >= minimum && parsed <= maximum ? (int) parsed : INVALID;
             });
@@ -324,9 +366,10 @@ public final class ConfigSchemaRepair {
 
         private static Rule longNumber(long defaultValue, long minimum, long maximum) {
             return new Rule(defaultValue, value -> {
-                if (!(value instanceof Number number)) {
+                if (!isIntegralNumber(value)) {
                     return INVALID;
                 }
+                Number number = (Number) value;
                 long parsed = number.longValue();
                 return parsed >= minimum && parsed <= maximum ? parsed : INVALID;
             });

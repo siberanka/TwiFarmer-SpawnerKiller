@@ -142,7 +142,7 @@ Modül Farmer'ın seçili dilini izler ve `plugins/Farmer/modules/spawnerkiller/
 
 Başlangıçta ve modül yeniden yüklemesinde yapılandırma ile dil dosyaları denetlenir. Eksik bilinen girdiler eklenir; bozuk YAML, yanlış türler, anlamsız değerler, aşırı sayılar, geçersiz izinler, filtre kipi ve varlık adları düzeltilir. Geçerli özel ve bilinmeyen genişletme girdileri korunur.
 
-Mevcut bir dosya değiştirilmeden önce aynı klasörde UTC zaman damgalı `*.bak-*` yedeği oluşturulur.
+Mevcut bir dosya değiştirilmeden önce aynı klasörde UTC zaman damgalı `*.bak-*` yedeği oluşturulur. Aynı dosya için yalnızca en yeni 20 yedek tutulur. YAML'ın aynı tam sayı değerini `Integer` veya `Long` olarak okuması değişiklik sayılmaz ve yeni yedek üretmez.
 
 ### Sorun giderme
 
@@ -305,7 +305,7 @@ The module follows Farmer's selected language and provides bundled languages und
 
 Configuration and language files are validated on startup and module reload. Missing known entries are added; malformed YAML, wrong types, meaningless values, excessive numbers, malformed permissions, filter modes, and entity names are repaired. Valid custom and unknown extension entries are preserved.
 
-Before an existing file is modified, a UTC timestamped `*.bak-*` copy is created beside it.
+Before an existing file is modified, a UTC timestamped `*.bak-*` copy is created beside it. Only the newest 20 backups are retained for each file. Reading the same integral YAML value as `Integer` or `Long` is not treated as a change and does not create another backup.
 
 ### Troubleshooting
 
