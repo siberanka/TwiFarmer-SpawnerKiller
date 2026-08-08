@@ -34,6 +34,7 @@ class ConfigSchemaRepairTest {
         YamlConfiguration repaired = YamlConfiguration.loadConfiguration(config.toFile());
         assertTrue(repaired.getBoolean("status"));
         assertEquals(1, repaired.getInt("required-farmer-level"));
+        assertEquals(16, repaired.getInt("wildstacker-recovery-radius"));
         assertFalse(repaired.getBoolean("optimize-module.enable"));
         assertTrue(repaired.getBoolean("update-checker.enable"));
         assertEquals(6, repaired.getInt("update-checker.check-interval-hours"));
@@ -54,6 +55,7 @@ class ConfigSchemaRepairTest {
         YamlConfiguration repaired = YamlConfiguration.loadConfiguration(config.toFile());
         assertFalse(repaired.getBoolean("status"));
         assertEquals(1, repaired.getInt("required-farmer-level"));
+        assertEquals(16, repaired.getInt("wildstacker-recovery-radius"));
         assertEquals("blacklist", repaired.getString("mode"));
         assertEquals(512, repaired.getInt("optimize-module.max-queued-entities"));
         assertEquals(1L, countBackups());
@@ -164,6 +166,7 @@ class ConfigSchemaRepairTest {
         assertTrue(yaml.contains("optimize-module.async-stack-drops"));
         assertTrue(yaml.isConfigurationSection("update-checker"));
         assertEquals(1, yaml.getInt("required-farmer-level"));
+        assertEquals(16, yaml.getInt("wildstacker-recovery-radius"));
         assertTrue(loaded.getUpdateChecker().isEnable());
         assertEquals(6, yaml.getInt("update-checker.check-interval-hours"));
         assertEquals(64, yaml.getInt("optimize-module.max-entities-per-run"));

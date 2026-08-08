@@ -1,0 +1,46 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Paper 1.21.x / Java 21
+            java: 21
+            profile: paper-1.21
+          - name: Paper 26.x / Java 25
+            java: 25
+            profile: paper-26
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      - name: Verify
+        run: mvn --batch-mode --no-transfer-progress -P${{ matrix.profile }} clean verify
+
+      - name: Upload module artifact
+        if: matrix.profile == 'paper-26'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Farmer-SpawnerKiller-${{ github.sha }}
+          path: target/Farmer-SpawnerKiller-*.jar
+          if-no-files-found: error

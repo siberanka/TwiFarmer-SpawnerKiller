@@ -186,6 +186,7 @@ public final class ConfigSchemaRepair {
         schema.put("required-farmer-level", Rule.integer(1, 1, 1000));
         schema.put("customPerm", Rule.string("farmer.spawnerkiller",
                 value -> value.matches("[A-Za-z0-9._-]{1,128}"), String::trim));
+        schema.put("wildstacker-recovery-radius", Rule.integer(16, 1, 64));
         schema.put("mode", Rule.string("blacklist",
                 value -> value.equals("blacklist") || value.equals("whitelist"),
                 value -> value.trim().toLowerCase(Locale.ROOT)));

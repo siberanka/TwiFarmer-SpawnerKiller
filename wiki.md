@@ -74,6 +74,7 @@ Dosya: `plugins/Farmer/modules/spawnerkiller/config.yml`
 | `defaultStatus` | `true` | Yeni Farmer'ların başlangıç SpawnerKiller durumudur. |
 | `required-farmer-level` | `1` | Modülün Farmer içinde kullanılabildiği en düşük seviye. |
 | `customPerm` | `farmer.spawnerkiller` | Menüden durum değiştirme izni. |
+| `wildstacker-recovery-radius` | `16` | WildStacker bir entity oluşturmadan mevcut yığını büyüttüğünde, yalnız spawner kaynaklı yığınlar için taranan blok yarıçapı (`1-64`). |
 
 #### Varlık filtreleri
 
@@ -128,9 +129,10 @@ Bukkit dünyası ve varlıkları asenkron iş parçacığında değiştirilmez. 
 
 ### SpawnerMeta ve WildStacker
 
-- SpawnerMeta algılandığında modül, tek tek Bukkit doğumlarını çift işlememek için SpawnerMeta'nın toplu doğum yolunu kullanır.
+- SpawnerMeta algılandığında toplu doğum yolu ile Bukkit yedek olayları birlikte dinlenir; entity kimliği üzerinden tekilleştirme çift ganimet üretimini engeller.
 - `max-entities-per-run`, büyük SpawnerMeta gruplarının tick'lere yayılmasını sağlar.
 - WildStacker algılandığında gerçek yığın miktarı ve eklentinin ganimet hesabı kullanılır.
+- WildStacker Paper pre-spawn optimizasyonunda yeni entity üretmeden mevcut bir yığını büyütürse, modül bağlı entity'yi ve yapılandırılmış yarıçaptaki yalnız `SPAWNER` kaynaklı yığınları bölge güvenli biçimde yeniden denetler.
 - `async-stack-drops` yalnızca hesap kısmını asenkron yapar; varlığın kaldırılması ve ganimet üretimi varlık zamanlayıcısında gerçekleşir.
 - Deneyim hesabı yaratığın çalışma anındaki Paper ödülünü kullanır; yeni 26.x varlık türleri sabit eski bir tabloya bağlı değildir.
 
@@ -237,6 +239,7 @@ File: `plugins/Farmer/modules/spawnerkiller/config.yml`
 | `defaultStatus` | `true` | Initial SpawnerKiller state for newly created Farmers. |
 | `required-farmer-level` | `1` | Lowest Farmer level that may use the module. |
 | `customPerm` | `farmer.spawnerkiller` | Permission required to toggle the menu state. |
+| `wildstacker-recovery-radius` | `16` | Block radius (`1-64`) scanned only for spawner-origin stacks when WildStacker grows a stack without creating an entity. |
 
 #### Entity filters
 
@@ -291,9 +294,10 @@ Bukkit worlds and entities are never mutated asynchronously. Async calculation r
 
 ### SpawnerMeta and WildStacker
 
-- When SpawnerMeta is detected, its batch-spawn path is used so individual Bukkit notifications are not processed twice.
+- When SpawnerMeta is detected, its batch path and Bukkit fallback events are both observed; entity-identity coalescing prevents duplicate rewards.
 - `max-entities-per-run` spreads large SpawnerMeta batches across ticks.
 - When WildStacker is detected, the real stack amount and its loot calculation are used.
+- If WildStacker's Paper pre-spawn optimization grows an existing stack without creating an entity, the linked entity and only `SPAWNER`-origin stacks within the configured radius are rechecked on their owning regions.
 - `async-stack-drops` moves calculation only; entity removal and drop creation remain on the entity scheduler.
 - Experience uses each mob's runtime Paper reward, so new 26.x entity types do not depend on an obsolete fixed table.
 
