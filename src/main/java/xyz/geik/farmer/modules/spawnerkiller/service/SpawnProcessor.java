@@ -1,11 +1,17 @@
 package xyz.geik.farmer.modules.spawnerkiller.service;
 
 import com.bgsoftware.wildstacker.api.WildStackerAPI;
+import com.bgsoftware.wildstacker.api.enums.SpawnCause;
 import com.bgsoftware.wildstacker.api.objects.StackedEntity;
+import com.bgsoftware.wildstacker.api.objects.StackedSpawner;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.World;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.CreatureSpawner;
 import org.bukkit.entity.Damageable;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -16,7 +22,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import xyz.geik.farmer.Main;
-import xyz.geik.farmer.api.FarmerAPI;
 import xyz.geik.farmer.api.managers.FarmerManager;
 import xyz.geik.farmer.model.Farmer;
 import xyz.geik.farmer.modules.spawnerkiller.SpawnerKiller;
@@ -46,11 +51,12 @@ public final class SpawnProcessor implements AutoCloseable {
     private final SpawnerKiller module;
     private final Plugin plugin;
     private final NamespacedKey processedKey;
-    private final boolean wildStackerAvailable;
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicInteger queued = new AtomicInteger();
     private final AtomicInteger asyncDropPlans = new AtomicInteger();
     private final Set<UUID> pendingEntities = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> deferredEntities = ConcurrentHashMap.newKeySet();
+    private final Set<RecoveryKey> pendingRecoveries = ConcurrentHashMap.newKeySet();
     private final Map<RegionKey, AtomicInteger> pendingRegions = new ConcurrentHashMap<>();
     private final Map<String, Long> lastWarnings = new ConcurrentHashMap<>();
 
@@ -58,11 +64,112 @@ public final class SpawnProcessor implements AutoCloseable {
         this.module = module;
         this.plugin = plugin;
         this.processedKey = new NamespacedKey(plugin, "spawnerkiller-processed");
-        this.wildStackerAvailable = Bukkit.getPluginManager().isPluginEnabled("WildStacker");
     }
 
     public void submit(Entity entity) {
         submit(entity, 0L);
+    }
+
+    /**
+     * Coalesces Bukkit and compatibility notifications, then waits for the
+     * spawn event chain and stack metadata to settle.
+     */
+    public void submitAfterSpawn(Entity entity) {
+        if (entity == null || closed.get() || !module.isOperational()
+                || !deferredEntities.add(entity.getUniqueId())) {
+            return;
+        }
+        UUID entityId = entity.getUniqueId();
+        boolean scheduled = entity.getScheduler().execute(plugin, () -> {
+            deferredEntities.remove(entityId);
+            submit(entity);
+        }, () -> deferredEntities.remove(entityId), 1L);
+        if (!scheduled) {
+            deferredEntities.remove(entityId);
+        }
+    }
+
+    /**
+     * WildStacker can satisfy Paper's pre-spawn event by increasing an
+     * existing stack and aborting entity creation. Recover linked and nearby
+     * spawner stacks without touching natural mobs or crossing Folia owners.
+     */
+    public void recoverCancelledPreSpawn(Location spawnerLocation, EntityType type) {
+        if (!isWildStackerAvailable() || spawnerLocation == null || type == null || closed.get()
+                || !module.isOperational() || !module.shouldProcess(type)
+                || !farmerAllows(spawnerLocation)) {
+            return;
+        }
+
+        submitLinkedSpawnerEntity(spawnerLocation, type);
+        World world = spawnerLocation.getWorld();
+        if (world == null) {
+            return;
+        }
+        int radius = module.getWildStackerRecoveryRadius();
+        int minimumChunkX = (spawnerLocation.getBlockX() - radius) >> 4;
+        int maximumChunkX = (spawnerLocation.getBlockX() + radius) >> 4;
+        int minimumChunkZ = (spawnerLocation.getBlockZ() - radius) >> 4;
+        int maximumChunkZ = (spawnerLocation.getBlockZ() + radius) >> 4;
+        for (int chunkX = minimumChunkX; chunkX <= maximumChunkX; chunkX++) {
+            for (int chunkZ = minimumChunkZ; chunkZ <= maximumChunkZ; chunkZ++) {
+                scheduleRecoveryChunk(world, chunkX, chunkZ, type);
+            }
+        }
+    }
+
+    private void submitLinkedSpawnerEntity(Location spawnerLocation, EntityType type) {
+        try {
+            BlockState state = spawnerLocation.getBlock().getState();
+            if (!(state instanceof CreatureSpawner spawner)) {
+                return;
+            }
+            StackedSpawner stackedSpawner = WildStackerAPI.getStackedSpawner(spawner);
+            LivingEntity linked = stackedSpawner == null ? null : stackedSpawner.getLinkedEntity();
+            if (linked != null && linked.getType() == type) {
+                submitAfterSpawn(linked);
+            }
+        }
+        catch (Exception | LinkageError exception) {
+            audit("wildstacker-linked", "WildStacker linked-spawner recovery failed; using the bounded chunk scan.", exception);
+        }
+    }
+
+    private void scheduleRecoveryChunk(World world, int chunkX, int chunkZ, EntityType type) {
+        RecoveryKey key = new RecoveryKey(world.getUID(), chunkX, chunkZ, type);
+        if (!pendingRecoveries.add(key)) {
+            return;
+        }
+        try {
+            Bukkit.getRegionScheduler().execute(plugin, world, chunkX, chunkZ, () -> {
+                pendingRecoveries.remove(key);
+                if (closed.get() || !module.isOperational() || !world.isChunkLoaded(chunkX, chunkZ)) {
+                    return;
+                }
+                Chunk chunk = world.getChunkAt(chunkX, chunkZ);
+                for (Entity candidate : chunk.getEntities()) {
+                    if (candidate instanceof LivingEntity livingEntity && candidate.getType() == type
+                            && isWildStackerSpawnerEntity(livingEntity)) {
+                        submitAfterSpawn(candidate);
+                    }
+                }
+            });
+        }
+        catch (RuntimeException exception) {
+            pendingRecoveries.remove(key);
+            audit("wildstacker-recovery", "WildStacker pre-spawn recovery was rejected by the region scheduler.", exception);
+        }
+    }
+
+    private boolean isWildStackerSpawnerEntity(LivingEntity entity) {
+        try {
+            StackedEntity stacked = WildStackerAPI.getStackedEntity(entity);
+            return stacked != null && stacked.getSpawnCause() == SpawnCause.SPAWNER;
+        }
+        catch (Exception | LinkageError exception) {
+            audit("wildstacker-recovery-api", "WildStacker recovery could not verify a stacked entity.", exception);
+            return false;
+        }
     }
 
     public void submit(Entity entity, long extraDelayTicks) {
@@ -212,13 +319,17 @@ public final class SpawnProcessor implements AutoCloseable {
 
     private boolean farmerAllows(Location location) {
         try {
-            boolean hasFarmer = FarmerAPI.getFarmerManager().hasFarmer(location);
-            if (!hasFarmer) {
+            String regionId = Main.getIntegration().getRegionID(location);
+            if (regionId == null || regionId.isBlank()) {
                 return !module.isRequireFarmer();
             }
-            Object regionId = Main.getIntegration().getRegionID(location);
             Farmer farmer = FarmerManager.getFarmers().get(regionId);
-            return farmer != null && farmer.getAttributeStatus("spawnerkiller");
+            if (farmer == null) {
+                return !module.isRequireFarmer();
+            }
+            synchronized (farmer) {
+                return farmer.getAttributeStatus("spawnerkiller");
+            }
         }
         catch (Exception | LinkageError exception) {
             audit("farmer-lookup", "SpawnerKiller denied a spawn transaction because Farmer state could not be verified.", exception);
@@ -227,7 +338,7 @@ public final class SpawnProcessor implements AutoCloseable {
     }
 
     private boolean killWildStack(LivingEntity entity, SpawnerKiller.OptimizationSettings optimization) {
-        if (!wildStackerAvailable) {
+        if (!isWildStackerAvailable()) {
             return false;
         }
 
@@ -567,6 +678,10 @@ public final class SpawnProcessor implements AutoCloseable {
         }
     }
 
+    private static boolean isWildStackerAvailable() {
+        return Bukkit.getPluginManager().isPluginEnabled("WildStacker");
+    }
+
     private void decrementRegion(RegionKey key, AtomicInteger count) {
         if (count.decrementAndGet() <= 0) {
             pendingRegions.remove(key, count);
@@ -577,6 +692,8 @@ public final class SpawnProcessor implements AutoCloseable {
     public void close() {
         closed.set(true);
         pendingEntities.clear();
+        deferredEntities.clear();
+        pendingRecoveries.clear();
         pendingRegions.clear();
         queued.set(0);
         asyncDropPlans.set(0);
@@ -584,6 +701,9 @@ public final class SpawnProcessor implements AutoCloseable {
     }
 
     private record RegionKey(UUID worldId, int regionX, int regionZ) {
+    }
+
+    private record RecoveryKey(UUID worldId, int chunkX, int chunkZ, EntityType type) {
     }
 
     private final class Reservation {

@@ -7,7 +7,7 @@ Farmer SpawnerKiller, spawner tarafından oluşturulan yaratıkları görünür 
 ### Öne çıkanlar
 
 - Vanilla/Paper spawner olayları ile SpawnerMeta toplu doğum desteği
-- WildStacker yığınları için miktar doğrulamalı ganimet işlemi
+- WildStacker yığınları ve Paper pre-spawn birleştirmeleri için miktar doğrulamalı ganimet işlemi
 - Varlık türü beyaz liste ve kara liste kipleri
 - İsteğe bağlı pişmiş yiyecek dönüşümü
 - Paper, Leaf ve Folia varlık/bölge zamanlayıcılarına uygun işleme
@@ -30,7 +30,7 @@ Farmer SpawnerKiller processes spawner-created mobs before they accumulate in th
 ### Highlights
 
 - Vanilla/Paper spawner events and SpawnerMeta batch-spawn support
-- Amount-validated loot processing for WildStacker stacks
+- Amount-validated loot processing for WildStacker stacks and Paper pre-spawn merges
 - Entity-type whitelist and blacklist modes
 - Optional cooked-food conversion
 - Paper, Leaf, and Folia entity/region-scheduler-aware processing

@@ -221,6 +221,7 @@ public class SpawnerKiller extends FarmerModule {
                 configFile.isRemoveMob(),
                 configFile.isDefaultStatus(),
                 configFile.getCustomPerm(),
+                clamp(configFile.getWildStackerRecoveryRadius(), 1, 64),
                 mode,
                 whitelist,
                 blacklist,
@@ -235,6 +236,9 @@ public class SpawnerKiller extends FarmerModule {
         spawnerKillerGuiCreateEvent = new SpawnerKillerGuiCreateEvent();
         Bukkit.getPluginManager().registerEvents(spawnerKillerGuiCreateEvent, Main.getInstance());
 
+        spawnerKillerEvent = new SpawnerKillerEvent(this, spawnProcessor);
+        Bukkit.getPluginManager().registerEvents(spawnerKillerEvent, Main.getInstance());
+
         if (Bukkit.getPluginManager().isPluginEnabled("SpawnerMeta")) {
             if (spawnerMetaEvent == null) {
                 spawnerMetaEvent = new SpawnerMetaEvent(this, spawnProcessor);
@@ -242,10 +246,6 @@ public class SpawnerKiller extends FarmerModule {
             else {
                 spawnerMetaEvent.activate(spawnProcessor);
             }
-        }
-        else {
-            spawnerKillerEvent = new SpawnerKillerEvent(this, spawnProcessor);
-            Bukkit.getPluginManager().registerEvents(spawnerKillerEvent, Main.getInstance());
         }
     }
 
@@ -320,6 +320,10 @@ public class SpawnerKiller extends FarmerModule {
         return settings.customPerm();
     }
 
+    public int getWildStackerRecoveryRadius() {
+        return settings.wildStackerRecoveryRadius();
+    }
+
     public Set<String> getWhitelist() {
         return settings.whitelist();
     }
@@ -383,6 +387,7 @@ public class SpawnerKiller extends FarmerModule {
             boolean removeMob,
             boolean defaultStatus,
             String customPerm,
+            int wildStackerRecoveryRadius,
             String mode,
             Set<String> whitelist,
             Set<String> blacklist,
@@ -390,7 +395,7 @@ public class SpawnerKiller extends FarmerModule {
 
         private static RuntimeSettings defaults() {
             return new RuntimeSettings(true, true, true, true,
-                    "farmer.spawnerkiller", "blacklist",
+                    "farmer.spawnerkiller", 16, "blacklist",
                     Collections.emptySet(), Set.of("VILLAGER"), OptimizationSettings.defaults());
         }
     }

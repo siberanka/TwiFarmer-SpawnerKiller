@@ -51,6 +51,11 @@ public class ConfigFile extends OkaeriConfig {
     @Comment({"custom perm for spawner killer status changer"})
     private String customPerm = "farmer.spawnerkiller";
 
+    @CustomKey("wildstacker-recovery-radius")
+    @Comment({"Chunk-safe radius used only when WildStacker aborts Paper entity creation",
+            "after increasing an existing spawner stack. Range: 1-64 blocks."})
+    private int wildStackerRecoveryRadius = 16;
+
     @Comment({"set whitelist mobs for spawner killer",
             "if you want to kill only whitelist mobs, set mode to whitelist",
             "if you want to kill all mobs except blacklist mobs, set mode to blacklist"})

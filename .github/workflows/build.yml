@@ -1,0 +1,66 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Paper 1.21.x / Java 21
+            java: 21
+            profile: paper-1.21
+          - name: Paper 26.x / Java 25
+            java: 25
+            profile: paper-26
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Java ${{ matrix.java }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      - name: Install Farmer v6-b125 API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .ci
+          gh release download v6-b125 \
+            --repo siberanka/TwiFarmer \
+            --pattern Farmer-v6-b125.jar \
+            --dir .ci
+          echo "0c4ecee684dfc9e8996f9f72efa7cbd7bc458713d290d585098491a22a247ab8  .ci/Farmer-v6-b125.jar" | sha256sum --check
+          mvn --batch-mode --no-transfer-progress install:install-file \
+            -Dfile=.ci/Farmer-v6-b125.jar \
+            -DgroupId=com.github.Geik-xyz \
+            -DartifactId=Farmer-v6 \
+            -Dversion=v6-b125 \
+            -Dpackaging=jar \
+            -DgeneratePom=true
+
+      - name: Verify
+        run: mvn --batch-mode --no-transfer-progress -P${{ matrix.profile }} clean verify
+
+      - name: Upload module artifact
+        if: matrix.profile == 'paper-26'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Farmer-SpawnerKiller-${{ github.sha }}
+          path: target/Farmer-SpawnerKiller-*.jar
+          if-no-files-found: error
